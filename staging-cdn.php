@@ -234,8 +234,8 @@ if (!class_exists ('stagingCDN')){
       foreach($sources as $key => $source) {
         $file_path = str_replace($staging_url . '/wp-content', '', $source['url']);
         //If file does not exist set url for current attachment to the Staging CDN url.
-        if ($local_check_on && !file_exists($this->media_path . $file_path )){
-          $sources[$key]['url'] = str_replace($staging_url, $current_url, $sources[$key]['url']);
+        if ($local_check_on && file_exists($this->media_path . $file_path )){
+          continue;
         } else {
           $sources[$key]['url'] = str_replace($staging_url, $current_url, $sources[$key]['url']);
         }
