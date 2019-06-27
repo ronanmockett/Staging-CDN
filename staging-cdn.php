@@ -41,6 +41,7 @@ if (!class_exists ('stagingCDN')){
       add_filter( 'wp_get_attachment_url', array($this, 'stgcdn_set_attachment_url'), 10, 2 );
       add_filter('wp_get_attachment_image_src', array($this, 'stgcdn_set_attachment_image_src'), 10, 4 );
       add_filter('wp_calculate_image_srcset', array($this, 'stgcdn_calculate_image_srcset'), 10, 4 );
+      add_filter('the_content', array($this, 'stgcdn_content_image_src'), 10, 1 );
     }
 
     public function __plugin_init(){
@@ -118,7 +119,6 @@ if (!class_exists ('stagingCDN')){
     }
     
     private function stgcdn_save_staging_url(){
-      //Run checks
       if (empty($_POST['stgcdn_new_url'])) {
         $this->stgcdn_settings_saved_status('failed', 'You did not enter a new url, please try again.');
         return;
@@ -162,12 +162,6 @@ if (!class_exists ('stagingCDN')){
 
       //Check if media exists locally.
       return $this->stgcdn_media_check( $url, $staging_url, $current_url );
-
-      // if ( $this->stgcdn_media_check( $url ) ) {
-      //   return $url;
-      // }
-      // $stgcdn_url = str_replace($staging_url, $current_url, $url);
-      // return $stgcdn_url;
     }
 
     public function stgcdn_set_attachment_image_src($image, $attachment_id, $size, $icon){
@@ -175,14 +169,6 @@ if (!class_exists ('stagingCDN')){
       if ($staging_url === $current_url || empty($current_url) || $image === false) {
         return $image;
       }
-      // if ( $this->stgcdn_media_check( $image[0] ) ) {
-      //   return $image;
-      // } 
-      // //If media does not exist locally then return Staging CDN url.
-      // $stgcdn_url = str_replace($staging_url, $current_url, $image[0]);
-      // $image[0] = $stgcdn_url;
-      // return $image;
-
       //Check if media exists locally.
       $image[0] = $this->stgcdn_media_check( $image[0], $staging_url, $current_url );
       return $image;
@@ -195,7 +181,6 @@ if (!class_exists ('stagingCDN')){
       }
       // Check each image src to see if stored locally. Set all non-existing media to Staging CDN url.
       return $this->stgcdn_media_check_srcset( $sources, $staging_url, $current_url );
-      // return $stgcdn_srcset;
     }
 
     private function stgcdn_settings_saved_status($status, $error = '') {
@@ -244,6 +229,22 @@ if (!class_exists ('stagingCDN')){
       return $sources; // Return new $sources with both Local & Staging CDN paths where applicable.
     }
 
+    private function stgcdn_media_check_content($sources, $staging_url, $current_url){
+      $local_check_on = ($this->stgcdn_plugin_settings['stgcdn_check_local'] === 'enabled');
+
+      foreach($sources as $key => $source) {
+        $file_path = str_replace($staging_url . '/wp-content', '', $source);
+        //If file does not exist set url for current attachment to the Staging CDN url.
+        if ($local_check_on && file_exists($this->media_path . $file_path )){
+          continue;
+        } else {
+          $sources[$key] = str_replace($staging_url, $current_url, $sources[$key]);
+        }
+      }
+      
+      return $sources; // Return new $sources with both Local & Staging CDN paths where applicable.
+    }
+
     private function stgcdn_ping_live_url() {
       $url_status = true;
       $url = $_POST['stgcdn_new_url'];
@@ -266,49 +267,26 @@ if (!class_exists ('stagingCDN')){
 
       return $url_status;
     }
+
+    public function stgcdn_content_image_src($content){
+      extract($this->stgcdn_urls);
+      if ($staging_url === $current_url || empty($current_url)) {
+        return $content;
+      }
+
+      $preg_match = preg_match_all("/\<img.+src\=(?:\"|\')(.+?)(?:\"|\')(?:.+?)\>/", $content, $matches);
+
+      if ($preg_match) {
+        $src_matches = $matches[1];
+        $returned_srcs = $this->stgcdn_media_check_content($src_matches, $staging_url, $current_url);
+
+        foreach($returned_srcs as $index => $src) {
+          $content = str_replace($src_matches[$index], $src, $content);
+        }
+      }
+  
+      return $content;
+    }
   }
-
-  // ------------ Deprecated/Retired -------------
-
-  // __construct => add_filter( 'wp_get_attachment_image_attributes', array($this, 'stgcdn_set_attachment_image_attributes'), 10, 3 );
-  // public function stgcdn_set_attachment_image_attributes($attr, $attachment, $size){
-  //   extract($this->stgcdn_urls);
-  //   if ($staging_url === $current_url || empty($current_url)) {
-  //     return $attr;
-  //   }
-  //   // Check each image src to see if stored locally. Set all non-existing media to Staging CDN url.
-  //   $stgcdn_srcset = $this->stgcdn_media_check_attr( $attr['srcset'] );
-  //   $attr['srcset'] = $stgcdn_srcset;
-  //   return $attr;
-  // }
-  // private function stgcdn_media_check_attr($srcset){
-  //   extract($this->stgcdn_urls);
-  //   $file_path = str_replace($staging_url . '/wp-content', '', $srcset);
-  //   // Check each attribute path for existing media, if it does not exist then return Staging CDN url.
-  //   $attr_paths = explode( ', ', $file_path );
-  //   $new_srcset = explode(', ', $srcset);
-  //   foreach($attr_paths as $index => $url_file_path) {
-  //     // Get position of space in url and return a substr of just the url.
-  //     $url_break_pos = strpos($url_file_path, ' ');
-  //     if ($url_break_pos !== FALSE) {
-  //       $url_file_path = substr($url_file_path, 0, $url_break_pos);
-  //     }
-  //     //If file does not exist set url for current attachment to the Staging CDN url.
-  //     if (!file_exists( $this->media_path . $url_file_path )) {
-  //       $new_srcset[$index] = str_replace($staging_url, $current_url, $new_srcset[$index]);
-  //     }
-  //   }
-  //   return implode(', ', $new_srcset); // Return srcset with both Local & Staging CDN paths where applicable.
-  // }
-
-
-
-
-
-
-
-
-
-
 }
 new stagingCDN();
