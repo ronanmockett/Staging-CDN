@@ -40,8 +40,8 @@ if (!class_exists ('stagingCDN')){
       add_action( 'admin_menu', array( $this, 'add_stgcdn_menu_page' ) );
       add_filter( 'wp_get_attachment_url', array($this, 'stgcdn_set_attachment_url'), 10, 2 );
       add_filter('wp_get_attachment_image_src', array($this, 'stgcdn_set_attachment_image_src'), 10, 4 );
-      add_filter('wp_calculate_image_srcset', array($this, 'stgcdn_calculate_image_srcset'), 10, 4 );
-      add_filter('the_content', array($this, 'stgcdn_content_image_src'), 10, 1 );
+      add_filter( 'wp_calculate_image_srcset', array($this, 'stgcdn_calculate_image_srcset'), 10, 4 );
+      add_filter( 'the_content', array($this, 'stgcdn_content_image_src'), 10, 1 );
     }
 
     public function __plugin_init(){
@@ -277,6 +277,7 @@ if (!class_exists ('stagingCDN')){
       $preg_match = preg_match_all("/\<img.+src\=(?:\"|\')(.+?)(?:\"|\')(?:.+?)\>/", $content, $matches);
 
       if ($preg_match) {
+        $markup = $matches[0]; // Un-used but can be more specific to only replace img src's rather than all content url matches.
         $src_matches = $matches[1];
         $returned_srcs = $this->stgcdn_media_check_content($src_matches, $staging_url, $current_url);
 
