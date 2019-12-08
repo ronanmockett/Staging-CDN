@@ -3,13 +3,13 @@
  * Plugin Name: Staging CDN
  * Plugin URI: https://wordpress.org/
  * Description: This plugin allows you to reference all media content from your live site.
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: Ronan Mockett
  * Author URI: http://wordpress.org/
  * Text Domain: stgcdn
  * License: GPL v2 or later
- * Requires at least: 7.0
- * Tested up to: 5.2.0
+ * Requires PHP: 7.0
+ * Tested up to: 5.3.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
