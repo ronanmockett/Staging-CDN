@@ -1,0 +1,29 @@
+{
+  "name": "staging-cdn",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ronanmockett/Staging-CDN.git"
+  },
+  "author": "Ronan Mockett",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ronanmockett/Staging-CDN/issues"
+  },
+  "homepage": "https://github.com/ronanmockett/Staging-CDN#readme",
+  "devDependencies": {
+    "autoprefixer": "^9.7.4",
+    "cssnano": "^4.1.10",
+    "gulp": "^4.0.2",
+    "gulp-clean": "^0.4.0",
+    "gulp-postcss": "^8.0.0",
+    "gulp-sass": "^4.0.2",
+    "gulp-sourcemaps": "^2.6.5",
+    "postcss": "^7.0.26"
+  }
+}

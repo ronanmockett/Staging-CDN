@@ -17,276 +17,227 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 if (!class_exists ('stagingCDN')){
 
   class stagingCDN {
-    private $stgcdn_urls;
-    private $stgcdn_status;
-    private $stgcdn_error;
-    private $media_path;
-    private $stgcdn_plugin_settings;
-    //Initial plugin defaults
-    private $stgcdn_init_plugin_settings = array(
-      'stgcdn_check_local' => 'enabled',
-    );
-    //Default args for plugin settings to revert back to.
-    private $stgcdn_default_plugin_settings = array(
-      'stgcdn_check_local' => NULL,
-    );
-    
-    public function __construct(){
-      //Save plugin settings
-      add_action( 'init', array( $this, 'stgcdn_save_settings' ) );
-      //Initialise plugin variables after settings have updated.
-      add_action( 'init', array($this, '__plugin_init') );
+        private $urls, $status, $error, $media_path, $plugin_settings, $plugin_dir;
 
-      add_action( 'admin_menu', array( $this, 'add_stgcdn_menu_page' ) );
-      add_filter( 'wp_get_attachment_url', array($this, 'stgcdn_set_attachment_url'), 10, 2 );
-      add_filter('wp_get_attachment_image_src', array($this, 'stgcdn_set_attachment_image_src'), 10, 4 );
-      add_filter('wp_calculate_image_srcset', array($this, 'stgcdn_calculate_image_srcset'), 10, 4 );
-      add_filter('the_content', array($this, 'stgcdn_content_image_src'), 10, 1 );
-    }
-
-    public function __plugin_init(){
-      $test = $this->stgcdn_plugin_settings = (!empty(get_option('stgcdn_plugin_settings')) && is_array(get_option('stgcdn_plugin_settings'))) ? get_option('stgcdn_plugin_settings') : $this->stgcdn_init_plugin_settings;
-      $this->stgcdn_urls = array(
-        'current_url' => get_option('stgcdn_current_url') ? get_option('stgcdn_current_url') : get_site_url(),
-        'staging_url' =>  get_site_url(),
-      );
-      $this->media_path = dirname( __DIR__ , 2);
-    }
-
-    public function add_stgcdn_menu_page(){
-      add_menu_page(
-            __( 'Staging CDN', 'stgcdn' ),
-            __( 'Staging CDN', 'stgcdn' ),
-            'manage_options',
-            'stgcdn-admin',
-            array( $this, 'stgcdn_admin_output' ),
-            'dashicons-editor-ul'
+        //Initial plugin defaults
+        private $init_plugin_settings = array(
+            'check_local' => 'enabled',
         );
-    }
+        
+        public function __construct(){
+            if ( is_admin() && !wp_doing_ajax() ) {
+                add_action( 'init', array( $this, 'save_settings' ) ); //Save plugin settings
+                add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ), 10);
+                add_action( 'admin_menu', array( $this, 'add_menu_page' ) );
+            }
 
-    public function stgcdn_admin_output(){ 
-      extract($this->stgcdn_urls);
-      $local_check_setting = ($this->stgcdn_plugin_settings['stgcdn_check_local'] === 'enabled');
-      if ($this->stgcdn_status === 'failed') {
-        echo "<div><p style='display: flex; padding: 15px; max-width: 600px; background: white; box-shadow: rgba(0, 0, 0, 0.1) 0px 1px 1px 0px;border-left: 4px solid #ce2020;'><strong style='text-transform:capitalize;color:#ce2020;margin-right:3px;'>$this->stgcdn_status :</strong> $this->stgcdn_error</p></div>";
-      } elseif ($this->stgcdn_status === 'success') {
-        echo "<div><p style='display: flex; padding: 15px; max-width: 600px; background: white; box-shadow: rgba(0, 0, 0, 0.1) 0px 1px 1px 0px;border-left: 4px solid #55af5a;'><strong style='text-transform:capitalize;color:#55af5a;margin-right:3px;'>$this->stgcdn_status :</strong> Your settings have been saved.</p></div>";
-      } ?>
-
-      <div style="margin-top:1em;max-width: 600px;background: white;padding: 15px 15px 30px 15px;box-shadow: rgba(0, 0, 0, 0.1) 0px 1px 1px 0px;border-left: 4px rgba(0,0,0,0.4) solid;">
-        <h1 style="margin-top:15px;">Staging CDN</h1>
-        <form action="?page=stgcdn-admin" method="post">
-        <div style="display: flex; flex-direction: column; align-items: flex-start;">
-          <label>Current URL media is being referenced from.</label>
-          <input name="stgcdn_current_url" type="text" value="<?php echo isset($_POST['stgcdn_new_url']) && !empty($_POST['stgcdn_new_url']) ? $_POST['stgcdn_new_url'] : $current_url; ?>" style="min-width:350px" disabled/><br/>
-          <label>Your Staging URL</label>
-          <input name="stgcdn_staging_url" type="text" value="<?php echo $staging_url; ?>" style="min-width:350px" disabled/><br/>
-          <label>New URL you would like to use</label>
-          <input name="stgcdn_new_url" type="text" value="" style="min-width:350px"/>
-          <input name="stgcdn_save_url" type="text" value="true" style="min-width:350px" hidden/>
-        </div>
-        <button type="submit" style="all: unset;padding: 15px 65px;width: 100%;max-width: 350px;box-sizing: border-box;margin-top: 15px;text-align: center;box-shadow: 0 0 1px black inset;">Update URL</button>
-        </form>
-      </div>
-
-
-      <div style="margin-top:1em;max-width: 600px;background: white;padding: 15px 15px 30px 15px;box-shadow: rgba(0, 0, 0, 0.1) 0px 1px 1px 0px;border-left: 4px rgba(0,0,0,0.4) solid;">
-        <h1 style="margin-top:15px;">Settings</h1>
-        <form action="?page=stgcdn-admin" method="post">
-        <div style="display: flex; flex-direction: column; align-items: flex-start;">
-          
-          <label for="local_checkbox" >
-            <input id="local_checkbox" name="stgcdn_check_local" type="checkbox" value="enabled" style="margin-top:0;" <?php echo $local_check_setting === true ? 'checked' : ''; ?>/>
-            Use sites own media if available?
-          </label>
-          <!-- <p>This is slightly slower but allows you to use your own media library as well.</p> -->
-          
-          
-          <input name="stgcdn_save_settings" type="text" value="true" style="min-width:350px" hidden/>
-        </div>
-        <button type="submit" style="all: unset;padding: 15px 65px;width: 100%;max-width: 350px;box-sizing: border-box;margin-top: 15px;text-align: center;box-shadow: 0 0 1px black inset;">Update Settings</button>
-        </form>
-      </div>
-
-    <?php }
-
-    public function stgcdn_save_settings(){
-      if (isset($_POST['stgcdn_save_url']) && $_POST['stgcdn_save_url'] === 'true') {
-        $this->stgcdn_save_staging_url();
-      } else if ( isset($_POST['stgcdn_save_settings']) && $_POST['stgcdn_save_settings'] === 'true' ) {
-        $this->stgcdn_save_plugin_settings();
-      } 
-    }
-    
-    private function stgcdn_save_staging_url(){
-      if (empty($_POST['stgcdn_new_url'])) {
-        $this->stgcdn_settings_saved_status('failed', 'You did not enter a new url, please try again.');
-        return;
-      }
-      if (! $this->stgcdn_ping_live_url() ){
-        $this->stgcdn_settings_saved_status('failed', 'Live site url did not return a valid response code (2xx), please try again.');
-        return;
-      }
-      
-      $new_url = $_POST['stgcdn_new_url'];
-      // Removes '/' from end of URL if it exists.
-      $_POST['stgcdn_new_url'] = $new_url = substr($new_url, -1) === '/' ? substr( $new_url, 0, (strlen($new_url)-1) ) : $new_url;
-      update_option('stgcdn_current_url', $new_url);
-      $this->stgcdn_settings_saved_status('success');
-    }
-
-    private function stgcdn_save_plugin_settings(){
-      $settings = array();
-      foreach($_POST as $key => $__post) {
-        if (strpos($key, 'stgcdn_') !== false ) {
-          $settings[$key] = $__post !== '' ? $__post : NULL;
+            add_action( 'init', array($this, '__plugin_init') ); //Initialise plugin variables after settings have updated.
+            add_filter( 'wp_get_attachment_url', array($this, 'set_attachment_url'), 10, 2 ); 
+            add_filter( 'wp_get_attachment_image_src', array($this, 'set_attachment_image_src'), 10, 4 );
+            add_filter( 'wp_calculate_image_srcset', array($this, 'calculate_image_srcset'), 10, 4 );
+            // Final check on 'the_content' hook for any images that are output in the content and are not output via the above Wordpress image filters.
+            add_filter( 'the_content', array($this, 'content_image_src' ), 10, 1 ); 
         }
-      }
-      unset($settings['stgcdn_save_settings']);
 
-      if (is_array($settings)){
-        $settings = array_merge($this->stgcdn_default_plugin_settings, $settings);
-        update_option('stgcdn_plugin_settings', $settings);
-        $this->stgcdn_settings_saved_status('success');
-      } else {
-        $this->stgcdn_settings_saved_status('failed', 'Something went wrong, please try again.');
-      }
-
-    }
-
-    public function stgcdn_set_attachment_url($url, $post_id){
-      extract($this->stgcdn_urls);
-      if ($staging_url === $current_url || empty($current_url)) {
-        return $url;
-      }
-
-      //Check if media exists locally.
-      return $this->stgcdn_media_check( $url, $staging_url, $current_url );
-    }
-
-    public function stgcdn_set_attachment_image_src($image, $attachment_id, $size, $icon){
-      extract($this->stgcdn_urls);
-      if ($staging_url === $current_url || empty($current_url) || $image === false) {
-        return $image;
-      }
-      //Check if media exists locally.
-      $image[0] = $this->stgcdn_media_check( $image[0], $staging_url, $current_url );
-      return $image;
-    }
-
-    public function stgcdn_calculate_image_srcset($sources, $size_array, $image_src, $image_meta, $attachment_id = 0) {
-      extract($this->stgcdn_urls);
-      if ($staging_url === $current_url || empty($current_url)) {
-        return $sources;
-      }
-      // Check each image src to see if stored locally. Set all non-existing media to Staging CDN url.
-      return $this->stgcdn_media_check_srcset( $sources, $staging_url, $current_url );
-    }
-
-    private function stgcdn_settings_saved_status($status, $error = '') {
-      $this->stgcdn_status = $status;
-      if (!empty($error)) {
-        $this->stgcdn_error = $error;
-      }
-    }
-
-    /** 
-     * Checks if media exists locally.
-     *
-     * @param string $url - Current media url.
-     * @return boolean True or False
-     */
-    private function stgcdn_media_check($url, $staging_url, $current_url) {
-      $local_check_on = ($this->stgcdn_plugin_settings['stgcdn_check_local'] === 'enabled');
-      $file_path = str_replace($staging_url . '/wp-content', '', $url);
-
-      if ($local_check_on && file_exists( $this->media_path . $file_path )) {
-        return $url; // Return Local path
-      }
-
-      return str_replace($staging_url, $current_url, $url);  // Return Staging CDN path
-    }
-
-    /** 
-     * Checks if srcset media exist locally.
-     *
-     * @param string $sources - Current media sources.
-     * @return array $sources - Returns sources array with updated urls.
-     */
-    private function stgcdn_media_check_srcset($sources, $staging_url, $current_url){
-      $local_check_on = ($this->stgcdn_plugin_settings['stgcdn_check_local'] === 'enabled');
-
-      foreach($sources as $key => $source) {
-        $file_path = str_replace($staging_url . '/wp-content', '', $source['url']);
-        //If file does not exist set url for current attachment to the Staging CDN url.
-        if ($local_check_on && file_exists($this->media_path . $file_path )){
-          continue;
-        } else {
-          $sources[$key]['url'] = str_replace($staging_url, $current_url, $sources[$key]['url']);
+        public function enqueue_scripts() {
+            wp_enqueue_style( 'stgcdn_admin_styles', plugin_dir_url( __FILE__ ) . 'admin/dist/styles.css', array(), filemtime($this->plugin_dir . 'admin/dist/styles.css') );
         }
-      }
-      
-      return $sources; // Return new $sources with both Local & Staging CDN paths where applicable.
-    }
 
-    private function stgcdn_media_check_content($sources, $staging_url, $current_url){
-      $local_check_on = ($this->stgcdn_plugin_settings['stgcdn_check_local'] === 'enabled');
-
-      foreach($sources as $key => $source) {
-        $file_path = str_replace($staging_url . '/wp-content', '', $source);
-        //If file does not exist set url for current attachment to the Staging CDN url.
-        if ($local_check_on && file_exists($this->media_path . $file_path )){
-          continue;
-        } else {
-          $sources[$key] = str_replace($staging_url, $current_url, $sources[$key]);
+        public function __plugin_init(){
+            $this->plugin_dir = plugin_dir_path( __DIR__ ) . 'staging-cdn/';
+            $this->plugin_settings = (!empty(get_option('stgcdn_settings')) && is_array(get_option('stgcdn_settings'))) ? get_option('stgcdn_settings') : $this->init_plugin_settings;
+            $this->urls = array(
+                'replacement_url' => get_option('stgcdn_replacement_url') ? get_option('stgcdn_replacement_url') : get_site_url(),
+                'staging_url' =>  get_site_url(),
+            );
+            $this->media_path = dirname( __DIR__ , 2);
         }
-      }
-      
-      return $sources; // Return new $sources with both Local & Staging CDN paths where applicable.
-    }
 
-    private function stgcdn_ping_live_url() {
-      $url_status = true;
-      $url = $_POST['stgcdn_new_url'];
-      $ch = curl_init($url);
-      curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-      curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-      $data = curl_exec($ch);
-      $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-      curl_close($ch);
-      if($httpcode>=200 && $httpcode<300){
-        $url_status = true;
-      } else {
-        $url_status = false;
-      }
-
-      if ($_POST['stgcdn_new_url'] === get_site_url()) {
-        $url_status = true;
-      }
-
-      return $url_status;
-    }
-
-    public function stgcdn_content_image_src($content){
-      extract($this->stgcdn_urls);
-      if ($staging_url === $current_url || empty($current_url)) {
-        return $content;
-      }
-
-      $preg_match = preg_match_all("/\<img.+src\=(?:\"|\')(.+?)(?:\"|\')(?:.+?)\>/", $content, $matches);
-
-      if ($preg_match) {
-        $src_matches = $matches[1];
-        $returned_srcs = $this->stgcdn_media_check_content($src_matches, $staging_url, $current_url);
-
-        foreach($returned_srcs as $index => $src) {
-          $content = str_replace($src_matches[$index], $src, $content);
+        public function add_menu_page(){
+            add_menu_page(
+                __( 'Staging CDN', 'stgcdn' ),
+                __( 'Staging CDN', 'stgcdn' ),
+                'manage_options',
+                'stgcdn-admin',
+                array( $this, 'admin_output' ),
+                'dashicons-editor-ul'
+            );
         }
-      }
-  
-      return $content;
+
+        public function admin_output(){ 
+            extract($this->urls);
+            $local_check_setting = ($this->plugin_settings['check_local'] === 'enabled');
+            include( $this->plugin_dir . 'admin/admin_settings.php');
+        }
+
+        public function save_settings(){
+            if (isset($_POST['save_url']) && $_POST['save_url'] === 'true') {
+                $this->save_staging_url();
+            } else if ( isset($_POST['save_settings']) && $_POST['save_settings'] === 'true' ) {
+                $this->save_plugin_settings();
+            } 
+        }
+        
+        private function save_staging_url(){
+            if (empty($_POST['new_url'])) {
+                $this->settings_saved_status('failed', 'You did not enter a new url, please try again.');
+                return;
+            }
+            if (! $this->ping_live_url($_POST['new_url']) ){
+                $this->settings_saved_status('failed', 'Live site url did not return a valid response code (2xx), please try again.');
+                return;
+            }
+            $new_url = $_POST['new_url'];
+            // Removes '/' from end of URL if it exists.
+            $_POST['new_url'] = $new_url = substr($new_url, -1) === '/' ? substr( $new_url, 0, (strlen($new_url)-1) ) : $new_url;
+            update_option('stgcdn_replacement_url', $new_url);
+            $this->settings_saved_status('success');
+        }
+
+        private function save_plugin_settings(){
+            $settings = array();
+            $default_args = array(
+                'check_local' => NULL,
+            );
+            
+            foreach($_POST as $key => $__post) {
+                if (strpos($key, '') !== false ) {
+                    $settings[$key] = $__post !== '' ? $__post : NULL;
+                }
+            }
+
+            unset($settings['save_settings']);
+
+            if (is_array($settings)){
+                $settings = array_merge($default_args, $settings);
+                update_option('stgcdn_settings', $settings);
+                $this->settings_saved_status('success');
+            } else {
+                $this->settings_saved_status('failed', 'Something went wrong, please try again.');
+            }
+
+        }
+
+        public function set_attachment_url($attachment_url, $post_id) : string {
+            extract($this->urls);
+            if ($staging_url === $replacement_url || empty($replacement_url)) {
+                return $attachment_url;
+            }
+            //Check if media exists locally, rewrites url if image does not exist..
+            return $this->rewrite_media_url( $attachment_url, $staging_url, $replacement_url );
+        }
+
+        public function set_attachment_image_src( $image, $attachment_id, $size, $icon ) {
+            extract($this->urls);
+            if ($staging_url === $replacement_url || empty($replacement_url) || $image === false) {
+                return $image;
+            }
+            //Check if media exists locally.
+            $image[0] = $this->rewrite_media_url( $image[0], $staging_url, $replacement_url );
+            return $image;
+        }
+
+        public function calculate_image_srcset($sources, $size_array, $image_src, $image_meta, $attachment_id = 0) : array {
+            extract($this->urls);
+            if ($staging_url === $replacement_url || empty($replacement_url)) {
+                return $sources;
+            }
+            // Check each image src to see if stored locally. Set all non-existing media to Staging CDN url.
+            return $this->rewrite_media_srcset( $sources, $staging_url, $replacement_url );
+        }
+
+        /** 
+         * Checks if media exists locally. Returns original string if it exists locally, else rewrites with staging url.
+         *
+         * @param string $url - Current media url.
+         * @return string 
+         */
+        private function rewrite_media_url(string $image_url, $staging_url, $replacement_url) : string {
+            $local_check_on = ($this->plugin_settings['check_local'] === 'enabled');
+            $file_path = str_replace($staging_url . '/wp-content', '', $image_url);
+            if ($local_check_on && file_exists( $this->media_path . $file_path )) {
+                return $image_url; // Return Local path
+            }
+            return str_replace($staging_url, $replacement_url, $image_url);  // Return Staging CDN path
+        }
+
+        /** 
+         * Checks if srcset media exists locally. Returns original array, if it exists locally, else rewrites with staging url.
+         *
+         * @param string $sources - Current media sources.
+         * @return array $sources - Returns sources array with updated urls.
+         */
+        private function rewrite_media_srcset(array $sources, string $staging_url, string $replacement_url) : array {
+            $local_check_on = ($this->plugin_settings['check_local'] === 'enabled');
+            foreach($sources as $key => $source) {
+                $file_path = str_replace($staging_url . '/wp-content', '', $source['url']);
+                //If file does not exist set url for current attachment to the Staging CDN url.
+                if ($local_check_on && file_exists($this->media_path . $file_path )){
+                    continue;
+                } else {
+                    $sources[$key]['url'] = str_replace($staging_url, $replacement_url, $sources[$key]['url']);
+                }
+            }
+            return $sources; // Return new $sources with both Local & Staging CDN paths where applicable.
+        }
+
+        private function rewrite_media_content(array $sources, string $staging_url, string $replacement_url) : array {
+            $local_check_on = ($this->plugin_settings['check_local'] === 'enabled');
+            foreach($sources as $key => $source) {
+                $file_path = str_replace($staging_url . '/wp-content', '', $source);
+                //If file does not exist set url for current attachment to the Staging CDN url.
+                if ($local_check_on && file_exists($this->media_path . $file_path )){
+                    continue;
+                } else {
+                    $sources[$key] = str_replace($staging_url, $replacement_url, $sources[$key]);
+                }
+            }
+            return $sources; // Return new $sources with both Local & Staging CDN paths where applicable.
+        }
+
+        public function content_image_src( string $content ) : string {
+            extract($this->urls);
+            if ($staging_url === $replacement_url || empty($replacement_url)) {
+                return $content;
+            }
+
+            $preg_match = preg_match_all("/\<img.+src\=(?:\"|\')(.+?)(?:\"|\')(?:.+?)\>/", $content, $matches);
+
+            if ($preg_match) {
+                $src_matches = $matches[1];
+                $returned_srcs = $this->rewrite_media_content($src_matches, $staging_url, $replacement_url);
+                foreach($returned_srcs as $index => $src) {
+                    $content = str_replace($src_matches[$index], $src, $content);
+                }
+            }
+        
+            return $content;
+        }
+
+        private function settings_saved_status($status, $error = '') {
+            $this->status = $status;
+            if (!empty($error)) {
+                $this->error = $error;
+            }
+        }
+
+        /** 
+         * Check url has a valid response code beteween 200 and 300.
+         *
+         * @param string $url = new url / replacement_url
+         * @return bool
+         */
+        private function ping_live_url( string $url ) : bool {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            $data = curl_exec($ch);
+            $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            return (($httpcode>=200 && $httpcode<300) || $url === get_site_url() ) ? true : false;
+        }
+        
     }
-  }
 }
 new stagingCDN();
