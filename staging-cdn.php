@@ -3,9 +3,9 @@
  * Plugin Name: Staging CDN
  * Plugin URI: https://wordpress.org/
  * Description: This plugin allows you to reference all media content from your live site.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: Ronan Mockett
- * Author URI: http://wordpress.org/
+ * Author URI: https://ronanmockett.co.uk/
  * Text Domain: stgcdn
  * License: GPL v2 or later
  * Requires PHP: 7.0
@@ -44,10 +44,12 @@ if (!class_exists ('stagingCDN')){
         }
 
         public function __plugin_init(){
+			$plugin_settings = get_option('stgcdn_settings');
+
             $this->plugin_dir = plugin_dir_path( __DIR__ ) . 'staging-cdn/';
-            $this->plugin_settings = (!empty(get_option('stgcdn_settings')) && is_array(get_option('stgcdn_settings'))) ? get_option('stgcdn_settings') : $this->init_plugin_settings;
+            $this->plugin_settings = (!empty($plugin_settings) && is_array($plugin_settings)) ? $plugin_settings : $this->init_plugin_settings;
             $this->urls = array(
-                'replacement_url' => get_option('stgcdn_replacement_url') ? get_option('stgcdn_replacement_url') : get_site_url(),
+                'replacement_url' => get_option('stgcdn_replacement_url') ?? get_site_url(),
                 'staging_url' =>  get_site_url(),
             );
             $this->media_path = dirname( __DIR__ , 2);
@@ -66,31 +68,36 @@ if (!class_exists ('stagingCDN')){
 
         public function admin_output(){ 
             extract($this->urls);
-            $local_check_setting = ($this->plugin_settings['check_local'] === 'enabled');
+            $local_check_setting = ($this->plugin_settings['stgcdn_check_local'] === 'enabled');
             include( $this->plugin_dir . 'admin/admin_settings.php');
         }
 
         public function save_settings(){
-            if (isset($_POST['save_url']) && $_POST['save_url'] === 'true') {
+            if (isset($_POST['stgcdn_save_url']) && $_POST['stgcdn_save_url'] === 'true') {
                 $this->save_staging_url();
-            } else if ( isset($_POST['save_settings']) && $_POST['save_settings'] === 'true' ) {
+            } else if ( isset($_POST['stgcdn_save_settings']) && $_POST['stgcdn_save_settings'] === 'true' ) {
                 $this->save_plugin_settings();
             } 
         }
         
         private function save_staging_url(){
-            if (empty($_POST['new_url'])) {
+            if (empty($_POST['stgdn_new_url'])) {
                 $this->settings_saved_status('failed', 'You did not enter a new url, please try again.');
                 return;
             }
-            if (! $this->ping_live_url($_POST['new_url']) ){
-                $this->settings_saved_status('failed', 'Live site url did not return a valid response code (2xx), please try again.');
-                return;
-            }
-            $new_url = $_POST['new_url'];
-            // Removes '/' from end of URL if it exists.
-            $_POST['new_url'] = $new_url = substr($new_url, -1) === '/' ? substr( $new_url, 0, (strlen($new_url)-1) ) : $new_url;
-            update_option('stgcdn_replacement_url', $new_url);
+
+			$validation = $this->validate_url($_POST['stgdn_new_url']);
+			$url = $validation['url'];
+
+			if ( !$validation['success'] ) {
+				$this->settings_saved_status( 'failed', $validation['msg'] );
+				return;
+			}
+
+            // Strip trailing slash if it exists and update global variable which is displayed on page load.
+			$_POST['stgcdn_updated_url'] = $url = ( substr($url, -1) === '/' ? substr( $url, 0, (strlen($url)-1) ) : $url );
+            update_option('stgcdn_replacement_url', $url);
+
             $this->settings_saved_status('success');
         }
 
@@ -100,13 +107,13 @@ if (!class_exists ('stagingCDN')){
                 'check_local' => NULL,
             );
             
-            foreach($_POST as $key => $__post) {
-                if (strpos($key, '') !== false ) {
-                    $settings[$key] = $__post !== '' ? $__post : NULL;
+            foreach($_POST as $key => $value) {
+                if (strpos($key, 'stgcdn_') !== false ) {
+                    $settings[$key] = $value !== '' ? $value : NULL;
                 }
             }
 
-            unset($settings['save_settings']);
+            unset($settings['stgcdn_save_settings']);
 
             if (is_array($settings)){
                 $settings = array_merge($default_args, $settings);
@@ -224,20 +231,62 @@ if (!class_exists ('stagingCDN')){
         /** 
          * Check url has a valid response code beteween 200 and 300.
          *
+         * @param string $url = replacement_url
+         * @return bool
+         */
+        public static function validate_url( string $url ) : array {
+            $response_code = self::get_url_response_code($url);
+			$response = array(
+				'success' => false,
+				'response_code' => null,
+				'msg' => '',
+				'url' => $url
+			);
+
+			if ( $response_code === 301 || $response_code === 302 ) { // If redirected then test the Url with/without appended '/'
+				$test_url = ( (substr($url, -1) === '/' ) ? substr($url, 0, -1) : $url . '/' ); // 
+				$response_code = self::get_url_response_code($test_url);
+			}
+
+			switch( true ) {
+				case ( $response_code >= 200 && $response_code < 300 ) : 
+					$response['success'] = true;
+					$response['response_code'] = $response_code;
+					$response['url'] = !empty( $test_url ) ? $test_url : $url;
+					break;
+				case ( $response_code === 301 || $response_code === 302 ) : 
+					$response['response_code'] = $response_code;
+					$response['msg'] = "Url redirected, please use fully resolved url. Response Code ( {$response_code} )";
+					break;
+				case ( $response_code === 0 ) : 
+					$response['response_code'] = $response_code;
+					$response['msg'] = "Could not validate url, validation timed out. Please check the url and try again.";
+					break;
+				default : 
+					$response['response_code'] = $response_code;
+					$response['msg'] = "Unexpected response code. Please check url and try again. Response Code ( {$response_code} )";
+			}
+
+			return $response;
+        }
+
+		/** 
+         * Gets http response code via curl
+         *
          * @param string $url = new url / replacement_url
          * @return bool
          */
-        private function ping_live_url( string $url ) : bool {
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            $data = curl_exec($ch);
-            $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-            return (($httpcode>=200 && $httpcode<300) || $url === get_site_url() ) ? true : false;
-        }
-        
+		private static function get_url_response_code( string $url ) : int {
+			$ch = curl_init($url);
+			curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+			curl_exec($ch);
+			$httpcode = curl_errno( $ch ) === 28 ? 0 : curl_getinfo($ch, CURLINFO_HTTP_CODE);
+			curl_close($ch);
+			return $httpcode;
+		}
+
     }
 }
 new stagingCDN();
