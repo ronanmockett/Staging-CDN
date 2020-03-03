@@ -258,7 +258,7 @@ if (!class_exists ('stagingCDN')){
 					$response['response_code'] = $response_code;
 					$response['msg'] = "Url redirected, please use fully resolved url. Response Code ( {$response_code} )";
 					break;
-				case ( $response_code === 0 ) : 
+				case ( $response_code === 504 ) : 
 					$response['response_code'] = $response_code;
 					$response['msg'] = "Could not validate url, validation timed out. Please check the url and try again.";
 					break;
@@ -271,7 +271,7 @@ if (!class_exists ('stagingCDN')){
         }
 
 		/** 
-         * Gets http response code via curl
+         * Gets http response code via cURL
          *
          * @param string $url = new url / replacement_url
          * @return bool
@@ -282,7 +282,12 @@ if (!class_exists ('stagingCDN')){
 			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 			curl_exec($ch);
-			$httpcode = curl_errno( $ch ) === 28 ? 0 : curl_getinfo($ch, CURLINFO_HTTP_CODE);
+			$cURL_error = curl_errno( $ch ); // Returns 0 if no error
+			$httpcode = ( 
+				$cURL_error > 0
+				? ( $cURL_error === 28 ? 504 : 500 ) // If there is an error set the most suitable httpcode
+				: curl_getinfo($ch, CURLINFO_HTTP_CODE) // No error, set $httpcode
+			);
 			curl_close($ch);
 			return $httpcode;
 		}
