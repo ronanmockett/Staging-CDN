@@ -30,7 +30,8 @@ if (!class_exists ('stagingCDN')){
             if ( is_admin() && !wp_doing_ajax() ) {
                 add_action( 'init', array( $this, 'save_settings' ) ); //Save plugin settings
                 add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ), 10);
-                add_action( 'admin_menu', array( $this, 'add_menu_page' ) );
+                add_action( 'admin_menu', array( $this, 'add_menu_page' ), 20 );
+				add_filter( 'plugin_action_links_staging-cdn/staging-cdn.php', array( $this, 'add_plugin_settings_link' ) );
             }
 
             add_action( 'init', array($this, '__plugin_init') ); //Initialise plugin variables after settings have updated.
@@ -58,15 +59,26 @@ if (!class_exists ('stagingCDN')){
         }
 
         public function add_menu_page(){
-            add_menu_page(
-                __( 'Staging CDN', 'stgcdn' ),
-                __( 'Staging CDN', 'stgcdn' ),
-                'manage_options',
-                'stgcdn-admin',
-                array( $this, 'admin_output' ),
-                'dashicons-editor-ul'
-            );
+			add_submenu_page(
+				'tools.php',
+				__( 'Staging CDN', 'stgcdn' ),
+				__( 'Staging CDN', 'stgcdn' ),
+				'manage_options',
+				'stgcdn-admin',
+				array( $this, 'admin_output' )
+			);
         }
+
+		function add_plugin_settings_link( $links ) {
+			$url = esc_url( add_query_arg(
+				'page',
+				'stgcdn-admin',
+				get_admin_url() . 'tools.php'
+			) );
+			$settings_link = "<a href='$url'>" . __( 'Settings' ) . '</a>';
+			array_push( $links, $settings_link );
+			return $links;
+		}
 
         public function admin_output(){ 
             extract($this->urls);
