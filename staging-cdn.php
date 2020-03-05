@@ -19,6 +19,8 @@ if (!class_exists ('stagingCDN')){
   class stagingCDN {
         private $urls, $status, $error, $media_path, $plugin_settings, $plugin_dir;
 
+		public static $textDomain = "stgcdn";
+
         //Initial plugin defaults
         private $init_plugin_settings = array(
             'check_local' => 'enabled',
@@ -81,12 +83,12 @@ if (!class_exists ('stagingCDN')){
         }
         
         private function save_staging_url(){
-            if (empty($_POST['stgdn_new_url'])) {
+            if (empty($_POST['stgcdn_new_url'])) {
                 $this->settings_saved_status('failed', 'You did not enter a new url, please try again.');
                 return;
             }
 
-			$validation = $this->validate_url($_POST['stgdn_new_url']);
+			$validation = $this->validate_url($_POST['stgcdn_new_url']);
 			$url = $validation['url'];
 
 			if ( !$validation['success'] ) {

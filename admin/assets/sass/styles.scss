@@ -1,57 +1,64 @@
 .stgcdn_notice {
-    display: flex; 
-    padding: 15px; 
-    max-width: 600px; 
-    background: white; 
-    box-shadow: rgba(0, 0, 0, 0.1) 0px 1px 1px 0px;
-    &.error {
-        border-left: 4px solid #ce2020;
-    }
-    &.success {
-        border-left: 4px solid #55af5a;
-    }
+	display: flex;
+	padding: 15px;
+	max-width: 600px;
+	background: white;
+	box-shadow: rgba(0, 0, 0, 0.1) 0px 1px 1px 0px;
+	strong {
+		text-transform: capitalize;
+		margin-right: 3px;
+	}
+	&.error {
+		border-left: 4px solid #ce2020;
+		strong {
+			color: #ce2020;
+		}
+	}
+	&.success {
+		border-left: 4px solid #55af5a;
+		strong {
+			color: #55af5a;
+		}
+	}
 }
 
 .stgcdn_admin {
+	.panel {
+		margin-top: 1em;
+		max-width: 600px;
+		background: white;
+		padding: 15px 15px 30px 15px;
+		box-shadow: rgba(0, 0, 0, 0.1) 0px 1px 1px 0px;
+		border-left: 4px rgba(0, 0, 0, 0.4) solid;
+	}
 
-    .panel {
-        margin-top:1em;
-        max-width: 600px;
-        background: white;
-        padding: 15px 15px 30px 15px;
-        box-shadow: rgba(0, 0, 0, 0.1) 0px 1px 1px 0px;
-        border-left: 4px rgba(0,0,0,0.4) solid;
-    }
+	.title {
+		margin-top: 15px;
+	}
 
-    .title {
-        margin-top:15px;
-    }
+	.options_wrapper {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+	}
 
-    .options_wrapper {
-        display: flex; 
-        flex-direction: column; 
-        align-items: flex-start;
-    }
-
-    form {
-        input {
-            min-width: 350px;
-            &[type="checkbox"] {
-                margin-top: 0;
-                min-width: unset;
-            }
-        }
-        button[type="submit"] {
-            all: unset;
-            padding: 15px 65px;
-            width: 100%;
-            max-width: 350px;
-            box-sizing: border-box;
-            margin-top: 15px;
-            text-align: center;
-            box-shadow: 0 0 1px black inset;
-        }
-    }
-
-
+	form {
+		input {
+			min-width: 350px;
+			&[type='checkbox'] {
+				margin-top: 0;
+				min-width: unset;
+			}
+		}
+		button[type='submit'] {
+			all: unset;
+			padding: 15px 65px;
+			width: 100%;
+			max-width: 350px;
+			box-sizing: border-box;
+			margin-top: 15px;
+			text-align: center;
+			box-shadow: 0 0 1px black inset;
+		}
+	}
 }

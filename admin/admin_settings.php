@@ -1,37 +1,37 @@
 <?php if ($this->status === 'failed') {
-    echo "<div><p class='stgcdn_notice error'><strong style='text-transform:capitalize;color:#ce2020;margin-right:3px;'>$this->status :</strong> $this->error</p></div>";
+    echo "<div><p class='stgcdn_notice error'><strong>" . __($this->status, $this::$textDomain) . ":</strong> " . __($this->error, $this::$textDomain) . "</p></div>";
 } elseif ($this->status === 'success') {
-    echo "<div><p class='stgcdn_notice success' style=''><strong style='text-transform:capitalize;color:#55af5a;margin-right:3px;'>$this->status :</strong> Your settings have been saved.</p></div>";
+    echo "<div><p class='stgcdn_notice success'><strong>" . __( sprintf( '%s',  $this->status ), $this::$textDomain ) . ":</strong> " . __('Your settings have been saved.', $this::$textDomain) . "</p></div>";
 } ?>
 
 <div class="stgcdn_admin">
     <div class="panel">
         <h1 class="title">Staging CDN</h1>
         <form action="?page=stgcdn-admin" method="post">
-            <div style="display: flex; flex-direction: column; align-items: flex-start;">
-                <label>Current URL media is being referenced from.</label>
-                <input name="stgcdn_current_url" type="text" value="<?php echo $_POST['stgcdn_updated_url'] ?? $replacement_url; ?>" style="min-width:350px" disabled/><br/>
-                <label>Your Staging URL</label>
-                <input name="stgcdn_staging_url" type="text" value="<?php echo $staging_url; ?>" style="min-width:350px" disabled/><br/>
-                <label>New Replacement URL</label>
-                <input name="stgcdn_new_url" type="text" value="" style="min-width:350px"/>
-                <input name="stgcdn_save_url" type="text" value="true" style="min-width:350px" hidden/>
+            <div class="options_wrapper">
+                <label><?php _e('Current URL media is being referenced from.', $this::$textDomain); ?></label>
+                <input name="stgcdn_current_url" type="text" value="<?php echo $_POST['stgcdn_updated_url'] ?? $replacement_url; ?>" disabled/><br/>
+                <label><?php _e('Your Staging URL', $this::$textDomain); ?></label>
+                <input name="stgcdn_staging_url" type="text" value="<?php echo $staging_url; ?>" disabled/><br/>
+                <label><?php _e('New Replacement URL', $this::$textDomain); ?></label>
+                <input name="stgcdn_new_url" type="text" value="" />
+                <input name="stgcdn_save_url" type="text" value="true" hidden/>
             </div>
-            <button type="submit" style="all: unset;padding: 15px 65px;width: 100%;max-width: 350px;box-sizing: border-box;margin-top: 15px;text-align: center;box-shadow: 0 0 1px black inset;">Update URL</button>
+            <button type="submit">Update URL</button>
         </form>
     </div>
 
-    <div class="panel" style="">
-        <h1 class="title">Settings</h1>
+    <div class="panel">
+        <h1 class="title"><?php _e('Settings', 'stgcdn'); ?></h1>
         <form action="?page=stgcdn-admin" method="post">
             <div class="options_wrapper">
                 <label for="local_checkbox" >
                 <input id="local_checkbox" name="stgcdn_check_local" type="checkbox" value="enabled" <?php echo $local_check_setting === true ? 'checked' : ''; ?>/>
-                Use sites own media if available?
+                <?php _e('Use sites own media if available?', $this::$textDomain); ?>
                 </label>
                 <input name="stgcdn_save_settings" type="text" value="true" hidden/>
             </div>
-            <button type="submit" style="">Update Settings</button>
+            <button type="submit"><?php _e('Update Settings', $this::$textDomain); ?></button>
         </form>
     </div>
         
