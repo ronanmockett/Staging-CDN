@@ -19,8 +19,6 @@ if (!class_exists ('stagingCDN')){
   class stagingCDN {
         private $urls, $status, $error, $media_path, $plugin_settings, $plugin_dir;
 
-		public static $textDomain = "stgcdn";
-
         //Initial plugin defaults
         private $init_plugin_settings = array(
             'check_local' => 'enabled',
