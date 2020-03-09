@@ -21,7 +21,7 @@ if (!class_exists ('stagingCDN')){
 
         //Initial plugin defaults
         private $init_plugin_settings = array(
-            'check_local' => 'enabled',
+            'stgcdn_check_local' => 'enabled',
         );
         
         public function __construct(){
@@ -80,7 +80,7 @@ if (!class_exists ('stagingCDN')){
 
         public function admin_output(){ 
             extract($this->urls);
-            $local_check_setting = ($this->plugin_settings['stgcdn_check_local'] === 'enabled');
+            $local_check_setting = ( $this->plugin_settings['stgcdn_check_local'] === 'enabled' );
             include( $this->plugin_dir . 'admin/admin_settings.php');
         }
 
@@ -116,7 +116,7 @@ if (!class_exists ('stagingCDN')){
         private function save_plugin_settings(){
             $settings = array();
             $default_args = array(
-                'check_local' => NULL,
+                'stgcdn_check_local' => NULL,
             );
             
             foreach($_POST as $key => $value) {
