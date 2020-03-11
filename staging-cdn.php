@@ -1,15 +1,15 @@
 <?php
 /**
  * Plugin Name: Staging CDN
- * Plugin URI: https://wordpress.org/
+ * Plugin URI: https://wordpress.org/staging-cdn
  * Description: This plugin allows you to reference all media content from your live site.
- * Version: 1.0.3
+ * Version: 1.0.0
  * Author: Ronan Mockett
  * Author URI: https://ronanmockett.co.uk/
  * Text Domain: stgcdn
  * License: GPL v2 or later
  * Requires PHP: 7.0
- * Tested up to: 5.3.0
+ * Tested up to: 5.3.2
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 if (!class_exists ('stagingCDN')){
 
   class stagingCDN {
-        private $urls, $status, $error, $media_path, $plugin_settings, $plugin_dir;
+        private $urls, $status, $error, $media_path, $plugin_settings, $plugin_dir, $check_local;
 
         //Initial plugin defaults
         private $init_plugin_settings = array(
@@ -45,15 +45,16 @@ if (!class_exists ('stagingCDN')){
         }
 
         public function __plugin_init(){
-			$plugin_settings = get_option('stgcdn_settings');
+			$plugin_settings = unserialize(get_option('stgcdn_settings'));
 
             $this->plugin_dir = plugin_dir_path( __DIR__ ) . 'staging-cdn/';
             $this->plugin_settings = (!empty($plugin_settings) && is_array($plugin_settings)) ? $plugin_settings : $this->init_plugin_settings;
             $this->urls = array(
-                'replacement_url' => get_option('stgcdn_replacement_url') ?? get_site_url(),
+                'replacement_url' => esc_url(!empty($replacement_url = get_option('stgcdn_replacement_url')) ? $replacement_url : get_site_url()),
                 'staging_url' =>  get_site_url(),
             );
             $this->media_path = dirname( __DIR__ , 2);
+			$this->check_local = ( $this->plugin_settings['stgcdn_check_local'] === 'on' );
         }
 
         public function add_menu_page(){
@@ -80,11 +81,21 @@ if (!class_exists ('stagingCDN')){
 
         public function admin_output(){ 
             extract($this->urls);
-            $local_check_setting = ( $this->plugin_settings['stgcdn_check_local'] === 'enabled' );
             include( $this->plugin_dir . 'admin/admin_settings.php');
         }
 
         public function save_settings(){
+			if ( isset($_GET['reset']) && $_GET['reset'] === '1' ) {
+				$url = add_query_arg('url_reset', '1', remove_query_arg('reset'));
+				header( 'Location: ' . $url );
+				update_option( 'stgcdn_replacement_url', '' );
+				die();
+			}
+
+			if ( isset($_GET['url_reset']) && $_GET['url_reset'] === '1' ) {
+				$this->update_error_notice('success');
+			}
+
             if (isset($_POST['stgcdn_save_url']) && $_POST['stgcdn_save_url'] === 'true') {
                 $this->save_staging_url();
             } else if ( isset($_POST['stgcdn_save_settings']) && $_POST['stgcdn_save_settings'] === 'true' ) {
@@ -94,15 +105,15 @@ if (!class_exists ('stagingCDN')){
         
         private function save_staging_url(){
             if (empty($_POST['stgcdn_new_url'])) {
-                $this->settings_saved_status('failed', 'You did not enter a new url, please try again.');
+                $this->update_error_notice('failed', 'You did not enter a new url, please try again.');
                 return;
             }
 
-			$validation = $this->validate_url($_POST['stgcdn_new_url']);
+			$validation = $this->validate_url( esc_url_raw( $_POST['stgcdn_new_url'] ) );
 			$url = $validation['url'];
 
 			if ( !$validation['success'] ) {
-				$this->settings_saved_status( 'failed', $validation['msg'] );
+				$this->update_error_notice( 'failed', $validation['msg'] );
 				return;
 			}
 
@@ -110,31 +121,30 @@ if (!class_exists ('stagingCDN')){
 			$_POST['stgcdn_updated_url'] = $url = ( substr($url, -1) === '/' ? substr( $url, 0, (strlen($url)-1) ) : $url );
             update_option('stgcdn_replacement_url', $url);
 
-            $this->settings_saved_status('success');
+            $this->update_error_notice('success');
         }
 
         private function save_plugin_settings(){
             $settings = array();
+
             $default_args = array(
                 'stgcdn_check_local' => NULL,
             );
             
             foreach($_POST as $key => $value) {
-                if (strpos($key, 'stgcdn_') !== false ) {
-                    $settings[$key] = $value !== '' ? $value : NULL;
+                if (strpos($key, 'stgcdn_') !== false && array_key_exists($key, $default_args) ) {
+					$s_value = sanitize_text_field($value);
+					$settings[sanitize_key($key)] = !empty($s_value) ? sanitize_text_field($s_value) : NULL;
                 }
             }
 
-            unset($settings['stgcdn_save_settings']);
-
             if (is_array($settings)){
                 $settings = array_merge($default_args, $settings);
-                update_option('stgcdn_settings', $settings);
-                $this->settings_saved_status('success');
+                $test = update_option('stgcdn_settings', serialize($settings) );
+                $this->update_error_notice('success');
             } else {
-                $this->settings_saved_status('failed', 'Something went wrong, please try again.');
+                $this->update_error_notice('failed', 'Something went wrong, please try again.');
             }
-
         }
 
         public function set_attachment_url($attachment_url, $post_id) : string {
@@ -172,9 +182,8 @@ if (!class_exists ('stagingCDN')){
          * @return string 
          */
         private function rewrite_media_url(string $image_url, $staging_url, $replacement_url) : string {
-            $local_check_on = ($this->plugin_settings['check_local'] === 'enabled');
             $file_path = str_replace($staging_url . '/wp-content', '', $image_url);
-            if ($local_check_on && file_exists( $this->media_path . $file_path )) {
+            if ($this->check_local && file_exists( $this->media_path . $file_path )) {
                 return $image_url; // Return Local path
             }
             return str_replace($staging_url, $replacement_url, $image_url);  // Return Staging CDN path
@@ -187,11 +196,10 @@ if (!class_exists ('stagingCDN')){
          * @return array $sources - Returns sources array with updated urls.
          */
         private function rewrite_media_srcset(array $sources, string $staging_url, string $replacement_url) : array {
-            $local_check_on = ($this->plugin_settings['check_local'] === 'enabled');
             foreach($sources as $key => $source) {
                 $file_path = str_replace($staging_url . '/wp-content', '', $source['url']);
                 //If file does not exist set url for current attachment to the Staging CDN url.
-                if ($local_check_on && file_exists($this->media_path . $file_path )){
+                if ($this->check_local && file_exists($this->media_path . $file_path )){
                     continue;
                 } else {
                     $sources[$key]['url'] = str_replace($staging_url, $replacement_url, $sources[$key]['url']);
@@ -201,11 +209,10 @@ if (!class_exists ('stagingCDN')){
         }
 
         private function rewrite_media_content(array $sources, string $staging_url, string $replacement_url) : array {
-            $local_check_on = ($this->plugin_settings['check_local'] === 'enabled');
             foreach($sources as $key => $source) {
                 $file_path = str_replace($staging_url . '/wp-content', '', $source);
                 //If file does not exist set url for current attachment to the Staging CDN url.
-                if ($local_check_on && file_exists($this->media_path . $file_path )){
+                if ($this->check_local && file_exists($this->media_path . $file_path )){
                     continue;
                 } else {
                     $sources[$key] = str_replace($staging_url, $replacement_url, $sources[$key]);
@@ -232,8 +239,9 @@ if (!class_exists ('stagingCDN')){
         
             return $content;
         }
+		
 
-        private function settings_saved_status($status, $error = '') {
+        private function update_error_notice(string $status, string $error = '') {
             $this->status = $status;
             if (!empty($error)) {
                 $this->error = $error;
@@ -247,62 +255,54 @@ if (!class_exists ('stagingCDN')){
          * @return bool
          */
         public static function validate_url( string $url ) : array {
-            $response_code = self::get_url_response_code($url);
-			$response = array(
-				'success' => false,
-				'response_code' => null,
-				'msg' => '',
-				'url' => $url
-			);
+			$request = wp_remote_head( $url );
 
-			if ( $response_code === 301 || $response_code === 302 ) { // If redirected then test the Url with/without appended '/'
-				$test_url = ( (substr($url, -1) === '/' ) ? substr($url, 0, -1) : $url . '/' ); // 
-				$response_code = self::get_url_response_code($test_url);
+			if ( !is_wp_error($request) ) { // If redirected then test the Url with/without appended '/'
+				$response_code = $request['response']['code'];
+				if ( $response_code === 301 || $response_code === 302 ) {
+					$test_url = ( (substr($url, -1) === '/' ) ? substr($url, 0, -1) : $url . '/' ); // 
+					$request = wp_remote_head( $test_url );
+				}
 			}
 
-			switch( true ) {
-				case ( $response_code >= 200 && $response_code < 300 ) : 
-					$response['success'] = true;
-					$response['response_code'] = $response_code;
-					$response['url'] = !empty( $test_url ) ? $test_url : $url;
-					break;
-				case ( $response_code === 301 || $response_code === 302 ) : 
-					$response['response_code'] = $response_code;
-					$response['msg'] = "Url redirected, please use fully resolved url. Response Code ( {$response_code} )";
-					break;
-				case ( $response_code === 504 ) : 
-					$response['response_code'] = $response_code;
-					$response['msg'] = "Could not validate url, validation timed out. Please check the url and try again.";
-					break;
-				default : 
-					$response['response_code'] = $response_code;
-					$response['msg'] = "Unexpected response code. Please check url and try again. Response Code ( {$response_code} )";
+			if ( is_wp_error($request) ) {
+				$response = array(
+					'success' => false,
+					'response_code' => 500,
+					'msg' => $request->errors['http_request_failed'][0],
+					'url' => $url
+				);
+			} else {
+				$response_code = $request['response']['code'];
+				$response = array(
+					'success' => false,
+					'response_code' => null,
+					'msg' => '',
+					'url' => $url // Sanitized URL for database
+				);
+
+				switch( true ) {
+					case ( $response_code >= 200 && $response_code < 300 ) : 
+						$response['success'] = true;
+						$response['response_code'] = $response_code;
+						$response['url'] = !empty( $test_url ) ? $test_url : $url;
+						break;
+					case ( $response_code === 301 || $response_code === 302 ) : 
+						$response['response_code'] = $response_code;
+						$response['msg'] = "Url redirected, please use fully resolved url. Response Code ( {$response_code} )";
+						break;
+					case ( $response_code === 504 ) : 
+						$response['response_code'] = $response_code;
+						$response['msg'] = "Could not validate url, validation timed out. Please check the url and try again.";
+						break;
+					default : 
+						$response['response_code'] = $response_code;
+						$response['msg'] = "Unexpected response code. Please check url and try again. Response Code ( {$response_code} )";
+				}
 			}
 
 			return $response;
         }
-
-		/** 
-         * Gets http response code via cURL
-         *
-         * @param string $url = new url / replacement_url
-         * @return bool
-         */
-		private static function get_url_response_code( string $url ) : int {
-			$ch = curl_init($url);
-			curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-			curl_exec($ch);
-			$cURL_error = curl_errno( $ch ); // Returns 0 if no error
-			$httpcode = ( 
-				$cURL_error > 0
-				? ( $cURL_error === 28 ? 504 : 500 ) // If there is an error set the most suitable httpcode
-				: curl_getinfo($ch, CURLINFO_HTTP_CODE) // No error, set $httpcode
-			);
-			curl_close($ch);
-			return $httpcode;
-		}
 
     }
 }
