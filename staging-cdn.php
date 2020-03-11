@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 if (!class_exists ('stagingCDN')){
 
   class stagingCDN {
-        private $urls, $status, $error, $media_path, $plugin_settings, $plugin_dir, $check_local;
+        private $urls, $status, $error, $uploads_dir, $uploads_url, $plugin_settings, $plugin_dir, $check_local;
 
         //Initial plugin defaults
         private $init_plugin_settings = array(
@@ -53,8 +53,10 @@ if (!class_exists ('stagingCDN')){
                 'replacement_url' => esc_url(!empty($replacement_url = get_option('stgcdn_replacement_url')) ? $replacement_url : get_site_url()),
                 'staging_url' =>  get_site_url(),
             );
-            $this->media_path = dirname( __DIR__ , 2);
 			$this->check_local = ( $this->plugin_settings['stgcdn_check_local'] === 'on' );
+
+			$this->uploads_dir =  wp_get_upload_dir()['basedir'];
+            $this->uploads_url = wp_get_upload_dir()['baseurl'];
         }
 
         public function add_menu_page(){
@@ -182,8 +184,9 @@ if (!class_exists ('stagingCDN')){
          * @return string 
          */
         private function rewrite_media_url(string $image_url, $staging_url, $replacement_url) : string {
-            $file_path = str_replace($staging_url . '/wp-content', '', $image_url);
-            if ($this->check_local && file_exists( $this->media_path . $file_path )) {
+			$file_path = str_replace($this->uploads_url, '', $image_url);
+
+            if ($this->check_local && file_exists( $this->uploads_dir . $file_path )) {
                 return $image_url; // Return Local path
             }
             return str_replace($staging_url, $replacement_url, $image_url);  // Return Staging CDN path
@@ -197,9 +200,9 @@ if (!class_exists ('stagingCDN')){
          */
         private function rewrite_media_srcset(array $sources, string $staging_url, string $replacement_url) : array {
             foreach($sources as $key => $source) {
-                $file_path = str_replace($staging_url . '/wp-content', '', $source['url']);
+				$file_path = str_replace($this->uploads_url, '', $source['url']);
                 //If file does not exist set url for current attachment to the Staging CDN url.
-                if ($this->check_local && file_exists($this->media_path . $file_path )){
+                if ($this->check_local && file_exists($this->uploads_dir . $file_path )){
                     continue;
                 } else {
                     $sources[$key]['url'] = str_replace($staging_url, $replacement_url, $sources[$key]['url']);
@@ -210,9 +213,9 @@ if (!class_exists ('stagingCDN')){
 
         private function rewrite_media_content(array $sources, string $staging_url, string $replacement_url) : array {
             foreach($sources as $key => $source) {
-                $file_path = str_replace($staging_url . '/wp-content', '', $source);
+				$file_path = str_replace($this->uploads_url, '', $source);
                 //If file does not exist set url for current attachment to the Staging CDN url.
-                if ($this->check_local && file_exists($this->media_path . $file_path )){
+                if ($this->check_local && file_exists($this->uploads_dir . $file_path )){
                     continue;
                 } else {
                     $sources[$key] = str_replace($staging_url, $replacement_url, $sources[$key]);
